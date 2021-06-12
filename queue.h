@@ -9,7 +9,10 @@
 
 #ifndef qValueType
 #define qValueType void *
+#define qNullValue NULL
 #endif
+
+typedef enum { BLOCK, DT, DH, RANDOM } Policy;
 
 typedef struct {
     pthread_mutex_t mutex;
@@ -35,7 +38,7 @@ qValueType dequeue(Queue *q) {
     debug("Dequeue from queue of size: %d from index: %d", q->used - 1,
           q->start_index);
     if (q->used == 0) {
-        return NULL;
+        return qNullValue;
     }
     qValueType value = q->values[q->start_index];
 
