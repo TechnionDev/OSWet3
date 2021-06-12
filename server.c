@@ -1,100 +1,46 @@
-#include "segel.h"
-#include "request.h"
-#include <pthread.h>
-// 
-// server.c: A very, very simple web server
-//
-// To run:
-//  ./server <portnum (above 2000)>
-//
-// Repeatedly handles HTTP requests sent to this port number.
-// Most of the work is done within routines written in request.c
-//
-typedef struct {} tasks_queue;
+#include "Thread_pool.h"
 
-void thread_requestHandle(){
-}
-
-
-typedef struct {
-  pthread_t *threads_arr;
-  tasks_queue *queue;
-  int pool_size;
-} threadPool;
-
-void threadPool_destroy(threadPool *pool) {
-    if(pool==NULL){
-        return;
-    }
-    for(int i =0;i<pool->pool_size;i++){
-        pthread_cancel(pool->threads_arr[i]);
-    }
-    free(pool->threads_arr);
-    free(pool);
-}
-
-threadPool *threadPool_create(tasks_queue *queue, int size) {
-    if (size <= 0 || queue == NULL) {
-        return NULL;
-    }
-    threadPool *pool = (threadPool *) malloc(sizeof(threadPool));
-    if (pool == NULL) {
-        return pool;
-    }
-    pool->pool_size = size;
-    pool->queue = queue;
-    pool->threads_arr = (pthread_t *) malloc(sizeof(pthread_t) * size);
-    if (pool->threads_arr == NULL) {
-        free(pool);
-        return NULL;
-    }
-
-    for (int i = 0; i < size; i++) {
-        if (pthread_create(&(pool->threads_arr[i]), NULL, thread_requestHandle, (tasks_queue *) pool->queue) != 0) {
-            threadPool_destroy(pool);
-            return NULL;
-        }
-    }
-    return pool;
-}
-
-
-
-// HW3: Parse the new arguments too
-void getargs(int *port, int argc, char *argv[]) {
+void getargs(int *port, Queue **queue, int *pool_size, int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);
         exit(1);
     }
     *port = atoi(argv[1]);
+    Policy p;
+    if (strcmp(argv[4], "block") == 0) {
+        p = BLOCK;
+    } else if (strcmp(argv[4], "dt") == 0) {
+        p = DT;
+    } else if (strcmp(argv[4], "dh") == 0) {
+        p = DH;
+    } else if (strcmp(argv[4], "random") == 0) {
+        p = RANDOM;
+    } else {
+        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        exit(1);
+    }
+    *queue = queue_create(atoi(argv[3]), p);
+    *pool_size = atoi(argv[2]);
 }
 
 int main(int argc, char *argv[]) {
 
-    int listenfd, connfd, port, clientlen;
+    int listenfd, connfd, port, clientlen, pool_size;
     struct sockaddr_in clientaddr;
-
-    getargs(&port, argc, argv);
-
-    // 
-    // HW3: Create some threads...
-    //
+    Queue *request_queue;
+    getargs(&port, &request_queue, &pool_size, argc, argv);
+    threadPool *pool = threadPool_create(request_queue, pool_size);
 
     listenfd = Open_listenfd(port);
     while (1) {
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *) &clientaddr, (socklen_t *) &clientlen);
-
-        //
-        // HW3: In general, don't handle the request in the main thread.
-        // Save the relevant info in a buffer and have one of the worker threads
-        // do the work.
-        //
-        requestHandle(connfd);
-
-        Close(connfd);
+        Task *task = (Task *) malloc(sizeof(Task));
+        task->connfd = connfd;
+        enqueue(request_queue, task);
     }
 
+    threadPool_destroy(pool);//TODO:: think when the pool is destroyed
 }
 
 
