@@ -30,7 +30,7 @@ void enqueue(Queue *q, qValueType value) {
     pthread_mutex_unlock(&(q->mutex));
 }
 
-qValueType dequeue(Queue q) {
+qValueType dequeue(Queue *q) {
     pthread_mutex_lock(&(q->mutex));
     debug("Dequeue from queue of size: %d from index: %d", q->used - 1,
           q->start_index);
