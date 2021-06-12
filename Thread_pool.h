@@ -11,6 +11,8 @@ typedef struct {
 typedef struct {} Queue;//TODO: remove when gur pushes Queue.h
 
 #define qValueType Task *
+#define qNullValue NULL
+
 typedef enum { BLOCK, DT, DH, RANDOM } Policy;//TODO: move to Queue.h
 qValueType dequeue(Queue *q);//TODO: remove when gur pushes Queue.h
 void enqueue(Queue *q, qValueType value);//TODO: remove when gur pushes Queue.h
