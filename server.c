@@ -1,8 +1,10 @@
 #include "Thread_pool.h"
 
+#define USAGE_TEXT "Usage: %s <port> <workers> <buffer_size> <policy>\n"
+
 void getargs(int *port, Queue **queue, int *pool_size, int argc, char *argv[]) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        fprintf(stderr, USAGE_TEXT, argv[0]);
         exit(1);
     }
     *port = atoi(argv[1]);
@@ -16,34 +18,27 @@ void getargs(int *port, Queue **queue, int *pool_size, int argc, char *argv[]) {
     } else if (strcmp(argv[4], "random") == 0) {
         p = RANDOM;
     } else {
-        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        fprintf(stderr, USAGE_TEXT,
+                argv[0]);
         exit(1);
     }
-    *queue = queue_create(atoi(argv[3]), p);
+    debug("Policy is %d", p);
+    *queue = queueCreate(atoi(argv[3]), p);
     *pool_size = atoi(argv[2]);
 }
 
 int main(int argc, char *argv[]) {
-
     int listenfd, connfd, port, clientlen, pool_size;
     struct sockaddr_in clientaddr;
     Queue *request_queue;
     getargs(&port, &request_queue, &pool_size, argc, argv);
-    threadPool *pool = threadPool_create(request_queue, pool_size);
+    threadPool_create(request_queue, pool_size);
 
     listenfd = Open_listenfd(port);
     while (1) {
         clientlen = sizeof(clientaddr);
-        connfd = Accept(listenfd, (SA *) &clientaddr, (socklen_t *) &clientlen);
-        Task *task = task_create(connfd);
+        connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *)&clientlen);
+        Task *task = taskCreate(connfd);
         enqueue(request_queue, task);
     }
-
-    threadPool_destroy(pool);//TODO:: think when the pool is destroyed
 }
-
-
-    
-
-
- 
