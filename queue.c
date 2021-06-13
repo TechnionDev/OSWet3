@@ -112,7 +112,7 @@ void enqueue(Queue *q, Task *task)
             close(q->values[q->startIndex]->connfd);
             task_destroy(q->values[q->startIndex]);
             q->values[q->startIndex] = NULL;
-            q->startIndex++;
+            q->startIndex = (q->startIndex + 1) % q->capacity;
             q->used--;
             break;
         case RANDOM:
@@ -127,10 +127,12 @@ void enqueue(Queue *q, Task *task)
                     r / (double)RAND_MAX)
                 {
                     toRemove--;
+                    debug("Dropping at %d fd %d", i, q->values[i]->connfd);
                     continue;
                 }
                 q->values[c = (c + 1) % q->capacity] = q->values[i];
             }
+
             break;
         }
     }
@@ -162,8 +164,7 @@ Task *dequeue(Queue *q)
     Task *value = q->values[q->startIndex];
     q->values[q->startIndex] = NULL;
     q->used--;
-    q->startIndex++;
-    q->startIndex %= q->capacity;
+    q->startIndex = (q->startIndex + 1) % q->capacity;
     if (!queueUnlock(q))
     {
         return NULL;
