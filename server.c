@@ -35,8 +35,7 @@ int main(int argc, char *argv[]) {
     while (1) {
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *) &clientaddr, (socklen_t *) &clientlen);
-        Task *task = (Task *) malloc(sizeof(Task));
-        task->connfd = connfd;
+        Task *task = task_create(connfd);
         enqueue(request_queue, task);
     }
 

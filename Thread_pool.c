@@ -1,11 +1,14 @@
 #include "Thread_pool.h"
 
-void thread_requestHandle(Queue *queue) {
+void *thread_requestHandle(void *args_t) {
+    Args *args = (Args *) args_t;
+    int http_request_count = 0;
     while (1) {
-        Task *task = dequeue(queue);
+        Task *task = dequeue(args->queue);
+        http_request_count++;
         requestHandle(task->connfd);
         close(task->connfd);
-        free(task);
+        task_destroy(task);
     }
 }
 
@@ -37,10 +40,24 @@ threadPool *threadPool_create(Queue *queue, int size) {
     }
 
     for (int i = 0; i < size; i++) {
-        if (pthread_create(&(pool->threads_arr[i]), NULL, thread_requestHandle, (Queue *) pool->queue) != 0) {
+        Args *args = args_create(pool->queue,i);//TODO:: think of when we call the args_destructor
+        if (pthread_create(&(pool->threads_arr[i]), NULL, thread_requestHandle, args) != 0) {
             threadPool_destroy(pool);
             return NULL;
         }
     }
     return pool;
+}
+
+Task *task_create(int connfd) {
+    Task *task = (Task *) malloc(sizeof(Task));
+    task->connfd = connfd;
+    gettimeofday(&task->time_of_arrival, NULL);
+    return task;
+}
+Args *args_create(Queue *queue, int thread_id) {
+    Args *args = (Args *) malloc(sizeof(Args));
+    args->queue = queue;
+    args->thread_id = thread_id;
+    return args;
 }
