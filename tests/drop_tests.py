@@ -35,6 +35,7 @@ class RequestsTest(unittest.TestCase):
         self.dyn_url = f'http://localhost:{DEFAULT_PORT}/{DEFAULT_DYNAMIC_PAGE}'
         self.static_url = f'http://localhost:{DEFAULT_PORT}/{DEFAULT_STATIC_PAGE}'
         self.not_found_url = f'http://localhost:{DEFAULT_PORT}/not_found'
+        self.forbidden_url = f'http://localhost:{DEFAULT_PORT}/forbidden.cgi'
         self.queue_size = queue_size
         self.max_reqs = self.queue_size + thread_count
         self.server_path = SERVER_PATH
@@ -62,12 +63,20 @@ class RequestsTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.server.terminate()
 
-    async def make_req(self, url):
+    async def make_req(self, url, method='get'):
         try:
             # arrival_time = time.time() * 1000  # in milliseconds
             req_ind = self.last_req_index
             self.last_req_index += 1
-            response = await requests.get(url)
+            if method == 'get':
+                response = await requests.get(url)
+            elif method == 'post':
+                response = await requests.post(url)
+            elif method == 'delete':
+                response = await requests.delete(url)
+            else:
+                self.fail('Unknown request method')
+
             # response_time = time.time() * 1000
             # self.assertAlmostEqual(arrival_time, float(response.headers['stat-req-arrival']), delta=min(500 * DYNAMIC_REQ_TIME, (response_time - arrival_time) * 0.2))
         except Exception as e:
@@ -230,8 +239,8 @@ class TestStatusCodes(RequestsTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, thread_count=1, queue_size=1, **kwargs)
 
-    async def _make_req(self, url, expected_status, stat_map):
-        task = asyncio.ensure_future(self.make_req(url))
+    async def _make_req(self, url, expected_status, stat_map, method='get'):
+        task = asyncio.ensure_future(self.make_req(url, method=method))
 
         res = await asyncio.ensure_future(task)
 
@@ -277,6 +286,28 @@ class TestStatusCodes(RequestsTest):
             'stat-thread-dynamic': 0
         }
         asyncio.run(self._make_req(self.static_url, 200, stat_map))
+
+    def test_forbidden(self):
+        stat_map = {
+            'stat-req-arrival': None,
+            'stat-req-dispatch': 0,
+            'stat-thread-id': 0,
+            'stat-thread-count': 1,
+            'stat-thread-static': 0,
+            'stat-thread-dynamic': 1
+        }
+        asyncio.run(self._make_req(self.forbidden_url, 403, stat_map))
+
+    def test_post(self):
+        stat_map = {
+            'stat-req-arrival': None,
+            'stat-req-dispatch': 0,
+            'stat-thread-id': 0,
+            'stat-thread-count': 1,
+            'stat-thread-static': 0,
+            'stat-thread-dynamic': 0
+        }
+        asyncio.run(self._make_req(self.static_url, 501, stat_map, method='post'))
 
 
 if __name__ == '__main__':
