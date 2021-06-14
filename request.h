@@ -1,5 +1,7 @@
 #ifndef __REQUEST_H__
+#define __REQUEST_H__
+#include "queue.h"
 
-void requestHandle(int fd);
+void requestHandle(Task *task);
 
 #endif
