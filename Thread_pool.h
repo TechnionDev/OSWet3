@@ -6,9 +6,9 @@
 #include "queue.h"
 
 typedef struct {
-    pthread_t *threads_arr;
+    pthread_t *threadsArr;
     Queue *queue;
-    int pool_size;
+    int poolSize;
 } threadPool;
 
 void *thread_requestHandle(void *args);
@@ -19,7 +19,7 @@ threadPool *threadPool_create(Queue *queue, int size);
 
 typedef struct {
     Queue *queue;
-    int thread_id;
+    int threadId;
 } Args;
 
 Args *args_create(Queue *queue, int thread_id);

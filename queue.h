@@ -6,7 +6,12 @@
 
 typedef struct {
     int connfd;
-    struct timeval time_of_arrival;
+    struct timeval timeOfArrival;
+    struct timeval dispathTime;
+    int threadId;
+    int threadReqHandledCount;
+    int threadReqHandledStaticCount;
+    int threadReqHandledDynamicCount;
 } Task;
 
 typedef enum {
@@ -17,7 +22,7 @@ typedef struct queue_t Queue;
 
 Task *taskCreate(int connfd);
 
-void task_destroy(Task *task);
+void taskDestroy(Task *task);
 
 Queue *queueCreate(size_t capacity, Policy policy);
 

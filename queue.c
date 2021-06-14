@@ -30,11 +30,15 @@ int queueUnlock(Queue *q) {
 Task *taskCreate(int connfd) {
     Task *task = (Task *) malloc(sizeof(Task));
     task->connfd = connfd;
-    gettimeofday(&task->time_of_arrival, NULL);
+    gettimeofday(&task->timeOfArrival, NULL);
+    task->threadId = -1;
+    task->threadReqHandledCount = -1;
+    task->threadReqHandledStaticCount = -1;
+    task->threadReqHandledDynamicCount = -1;
     return task;
 }
 
-void task_destroy(Task *task) { free(task); }
+void taskDestroy(Task *task) { free(task); }
 
 Queue *queueCreate(size_t capacity, Policy policy) {
     srand(time(NULL));
@@ -104,20 +108,20 @@ void enqueue(Queue *q, Task *task) {
             case DH:
                 warning("Queue is full. Dropping head with fd %d", q->values[q->startIndex]->connfd);
                 close(q->values[q->startIndex]->connfd);
-                task_destroy(q->values[q->startIndex]);
+                taskDestroy(q->values[q->startIndex]);
                 q->values[q->startIndex] = NULL;
                 q->startIndex = (q->startIndex + 1) % q->capacity;
                 q->used--;
                 break;
             case RANDOM:
-                warning("Queue is full. Removing 25%% at random");
                 // Remove 25% of the queue at random
                 toRemove = q->used * 0.25;
+                warning("Queue is full. Removing 25%% (%d) at random", toRemove);
                 q->used -= toRemove; // Update the new used
                 for (int i = 0, r = rand() % (q->capacity - i); i < toRemove; i++, r = rand() % (q->capacity - i)) {
                     r = (q->startIndex + r) % q->capacity;
                     close(q->values[r]->connfd);
-                    task_destroy(q->values[r]);
+                    taskDestroy(q->values[r]);
                     q->values[r] = NULL;
                     if (r == q->startIndex) {
                         q->startIndex = (q->startIndex + 1) % q->capacity;
