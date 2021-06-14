@@ -42,9 +42,7 @@ threadPool *threadPool_create(Queue *queue, int size) {
     }
 
     for (int i = 0; i < size; i++) {
-        Args *args =
-                args_create(pool->queue,
-                            i);  // TODO:: think of when we call the args_destructor
+        Args *args = args_create(pool->queue, i);
         if (pthread_create(&(pool->threads_arr[i]), NULL, thread_requestHandle,
                            args) != 0) {
             threadPool_destroy(pool);
@@ -60,5 +58,3 @@ Args *args_create(Queue *queue, int thread_id) {
     args->thread_id = thread_id;
     return args;
 }
-
-void args_destroy(Args *args) { free(args); }
