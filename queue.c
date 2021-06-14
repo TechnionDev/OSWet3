@@ -69,6 +69,17 @@ Queue *queueCreate(size_t capacity, Policy policy) {
     return queue;
 }
 
+int queuePrint(Queue *q) {
+    return 0; // Comment to allow queue prints
+    char str[1024] = {0};
+    int printed = 0;
+    for (int j = 0; j < q->capacity; j++) {
+        printed += sprintf(str + printed, "%d ", q->values[j] ? q->values[j]->connfd : 0);
+    }
+    debug("Start index %zu. Queue: %s", q->startIndex, str);
+    return 0;
+}
+
 void enqueue(Queue *q, Task *task) {
     if (!queueLock(q)) {
         return;
@@ -103,23 +114,34 @@ void enqueue(Queue *q, Task *task) {
                 // Remove 25% of the queue at random
                 toRemove = q->used * 0.25;
                 q->used -= toRemove; // Update the new used
-                for (int i = q->startIndex, c = q->startIndex, r = rand();
-                     i < q->capacity; i = (i + 1) % q->capacity, r = rand()) {
-                    if (toRemove / (double) (q->capacity - i) >
-                        r / (double) RAND_MAX) {
-                        toRemove--;
-                        debug("Dropping at %d fd %d", i, q->values[i]->connfd);
+                for (int i = 0, r = rand() % (q->capacity - i); i < toRemove; i++, r = rand() % (q->capacity - i)) {
+                    r = (q->startIndex + r) % q->capacity;
+                    close(q->values[r]->connfd);
+                    task_destroy(q->values[r]);
+                    q->values[r] = NULL;
+                    if (r == q->startIndex) {
+                        q->startIndex = (q->startIndex + 1) % q->capacity;
                         continue;
                     }
-                    q->values[c = (c + 1) % q->capacity] = q->values[i];
+                    for (int j = r; j != q->startIndex; j = (j + 1) % q->capacity) {
+                        if (j == r) {
+                            continue;
+                        }
+                        // Because capacity is unsigned, it's converted to unsigned and causes a weird behaviour with negative numbers
+                        q->values[(q->capacity + j - 1) % q->capacity] = q->values[j];
+                        q->values[j] = NULL;
+                        queuePrint(q);
+                    }
                 }
+                debug("Queue's new capacity: %zu", q->used);
 
                 break;
         }
     }
-    val_index = (q->startIndex + (q->used++)) % q->capacity;
-    debug("Enqueuing fd: %d", task->connfd);
-    debug("Enqueue to queue of size: %zu to index: %d", q->used - 1, val_index);
+
+    val_index = (q->startIndex + q->used) % q->capacity;
+    q->used++;
+    debug("Enqueuing fd: %d to queue of size: %zu to index: %d", task->connfd, q->used - 1, val_index);
 
     q->values[val_index] = task;
 
