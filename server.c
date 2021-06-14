@@ -38,6 +38,7 @@ int main(int argc, char *argv[]) {
     while (1) {
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *) &clientaddr, (socklen_t *) &clientlen);
+        debug("Accepted connection with fd: %d", connfd);
         Task *task = taskCreate(connfd);
         enqueue(request_queue, task);
     }
