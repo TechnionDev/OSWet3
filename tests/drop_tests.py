@@ -34,6 +34,7 @@ class RequestsTest(unittest.TestCase):
         super().__init__(*args, **kwargs)
         self.dyn_url = f'http://localhost:{DEFAULT_PORT}/{DEFAULT_DYNAMIC_PAGE}'
         self.static_url = f'http://localhost:{DEFAULT_PORT}/{DEFAULT_STATIC_PAGE}'
+        self.not_found_url = f'http://localhost:{DEFAULT_PORT}/not_found'
         self.queue_size = queue_size
         self.max_reqs = self.queue_size + thread_count
         self.server_path = SERVER_PATH
@@ -61,7 +62,7 @@ class RequestsTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.server.terminate()
 
-    async def dyn_req(self, url):
+    async def make_req(self, url):
         try:
             # arrival_time = time.time() * 1000  # in milliseconds
             req_ind = self.last_req_index
@@ -83,27 +84,28 @@ class RequestsTest(unittest.TestCase):
         fail_expected_tasks = []
         thread_stats = [{'count': 0, 'dyn': 0, 'static': 0} for _ in range(self.thread_count)]
         expected_error_count = total_reqs - self.max_reqs + ((-(total_reqs - self.max_reqs)) % self.per_drop_size)
+        expected_average_dispatch = 1000 * DYNAMIC_REQ_TIME * float(total_reqs - expected_error_count) / self.thread_count / 2
 
         if self.policy == 'random':
             for _ in range(total_reqs):
-                task = asyncio.ensure_future(self.dyn_req(url))
+                task = asyncio.ensure_future(self.make_req(url))
                 tasks.append(task)
         elif self.policy == 'dt':
             for _ in range(total_reqs - expected_error_count):
-                task = asyncio.ensure_future(self.dyn_req(url))
+                task = asyncio.ensure_future(self.make_req(url))
                 tasks.append(task)
 
             for _ in range(expected_error_count):
-                task = asyncio.ensure_future(self.dyn_req(url))
+                task = asyncio.ensure_future(self.make_req(url))
                 fail_expected_tasks.append(task)
 
         elif self.policy == 'dh':
             for _ in range(expected_error_count):
-                task = asyncio.ensure_future(self.dyn_req(url))
+                task = asyncio.ensure_future(self.make_req(url))
                 fail_expected_tasks.append(task)
 
             for _ in range(total_reqs - expected_error_count):
-                task = asyncio.ensure_future(self.dyn_req(url))
+                task = asyncio.ensure_future(self.make_req(url))
                 tasks.append(task)
 
         responses = await asyncio.gather(*tasks, *fail_expected_tasks, return_exceptions=True)
@@ -111,6 +113,7 @@ class RequestsTest(unittest.TestCase):
         responses = sorted(responses, key=lambda x: x.req_ind)
 
         error_count = 0
+        total_dispatch = 0
         for res in responses:
             if res.is_exception_of_type(RemoteProtocolError):
                 error_count += 1
@@ -119,6 +122,7 @@ class RequestsTest(unittest.TestCase):
                 raise res.e
 
             res = res.res
+            total_dispatch += float(res.headers['stat-req-dispatch'])
             count, dyn, static = int(res.headers['stat-thread-count']), int(res.headers['stat-thread-dynamic']), int(res.headers['stat-thread-static'])
 
             tid = int(res.headers['stat-thread-id'])
@@ -129,6 +133,9 @@ class RequestsTest(unittest.TestCase):
             self.assertEqual(static, 0)
             # self.assertAlmostEqual(float(res.headers['stat-req-arrival']), arrival_time)
 
+        average_dispatch = total_dispatch / float(total_reqs - error_count)
+        self.assertAlmostEqual(average_dispatch, expected_average_dispatch, delta=expected_average_dispatch * 0.3,
+                               msg=f'Unexpected average dispatch time. Expected: {expected_average_dispatch}. Actual: {average_dispatch}')
         total_count = total_dyn = 0
 
         for stat in thread_stats:
@@ -142,7 +149,6 @@ class RequestsTest(unittest.TestCase):
         self.assertEqual(total_count, total_dyn)
 
         self.assertEqual(error_count, expected_error_count, f'Unexpected error count. Expected {expected_error_count}. Actual: {error_count}')
-
 
         # TODO: Fix check. Should check that the correct requests failed for each policy type
         # if self.policy == 'dh':
@@ -218,6 +224,59 @@ class TestMultiThreaded(RequestsTest):
         more_threads_run_time = time.time() - start_time
 
         self.assertTrue(2 * more_threads_run_time < few_threads_run_time < 3 * more_threads_run_time, "Performance doesn't scale as expected with amount of threads")
+
+
+class TestStatusCodes(RequestsTest):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, thread_count=1, queue_size=1, **kwargs)
+
+    async def _make_req(self, url, expected_status, stat_map):
+        task = asyncio.ensure_future(self.make_req(url))
+
+        res = await asyncio.ensure_future(task)
+
+        headers = res.res.headers
+
+        for k in stat_map:
+            self.assertIn(k, headers)
+            if stat_map[k] is not None:
+                self.assertEqual(int(headers[k]), stat_map[k], f'Unexpected value for {k}. Expected: {stat_map[k]}. Actual: {headers[k]}')
+
+        self.assertEqual(expected_status, res.res.status_code, f'Unexpected status code. Expected: {expected_status}. Actual: {res.res.status_code}')
+
+    def test_404(self):
+        stat_map = {
+            'stat-req-arrival': None,
+            'stat-req-dispatch': 0,
+            'stat-thread-id': 0,
+            'stat-thread-count': 1,
+            'stat-thread-static': 0,
+            'stat-thread-dynamic': 0
+        }
+
+        asyncio.run(self._make_req(self.not_found_url, 404, stat_map))
+
+    def test_dynamic(self):
+        stat_map = {
+            'stat-req-arrival': None,
+            'stat-req-dispatch': 0,
+            'stat-thread-id': 0,
+            'stat-thread-count': 1,
+            'stat-thread-static': 0,
+            'stat-thread-dynamic': 1
+        }
+        asyncio.run(self._make_req(self.dyn_url, 200, stat_map))
+
+    def test_static(self):
+        stat_map = {
+            'stat-req-arrival': None,
+            'stat-req-dispatch': 0,
+            'stat-thread-id': 0,
+            'stat-thread-count': 1,
+            'stat-thread-static': 1,
+            'stat-thread-dynamic': 0
+        }
+        asyncio.run(self._make_req(self.static_url, 200, stat_map))
 
 
 if __name__ == '__main__':
