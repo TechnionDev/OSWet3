@@ -38,13 +38,13 @@ void requestError(Task *task, char *cause, char *errnum, char *shortmsg, char *l
     Rio_writen(task->connfd, buf, strlen(buf));
     printf("%s", buf);
 
-    sprintf(buf, "Content-Length: %lu\r\n\r\n", strlen(body));
-    Rio_writen(task->connfd, buf, strlen(buf));
-    printf("%s", buf);
-
     // Add stats headers
     buf[0] = '\0';
     addStatsHeaders(buf, task);
+    Rio_writen(task->connfd, buf, strlen(buf));
+    printf("%s", buf);
+
+    sprintf(buf, "Content-Length: %lu\r\n\r\n", strlen(body));
     Rio_writen(task->connfd, buf, strlen(buf));
     printf("%s", buf);
 
