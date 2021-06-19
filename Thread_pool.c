@@ -9,7 +9,7 @@ void *thread_requestHandle(void *args_t) {
         Task *task = dequeue(args->queue);
         debug("Start handling %d", task->connfd);
         httpRequestCount++;
-        gettimeofday(&task->dispathTime, NULL);
+        gettimeofday(&task->dispatchTime, NULL);
         task->threadId = args->threadId;
         task->threadReqHandledCount = httpRequestCount;
         task->threadReqHandledStaticCount = httpRequestStaticCount;
@@ -20,6 +20,7 @@ void *thread_requestHandle(void *args_t) {
         debug("Finish handling %d", task->connfd);
         close(task->connfd);
         taskDestroy(task);
+        decConnCounter();
     }
 }
 

@@ -3,11 +3,12 @@
 
 #include "log.h"
 #include "segel.h"
+#include "globalConnectionsCounter.h"
 
 typedef struct {
     int connfd;
     struct timeval timeOfArrival;
-    struct timeval dispathTime;
+    struct timeval dispatchTime;
     int threadId;
     int threadReqHandledCount;
     int threadReqHandledStaticCount;
