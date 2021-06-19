@@ -23,6 +23,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include "log.h"
 
 
 /* Default file permissions are DEF_MODE & ~DEF_UMASK */
@@ -67,6 +68,7 @@ void app_error(char *msg);
 pid_t Fork(void);
 void Execve(const char *filename, char *const argv[], char *const envp[]);
 pid_t Wait(int *status);
+pid_t WaitPid(pid_t pid, int *status, int options);
 
 int Gethostname(char *name, size_t len) ;
 int Setenv(const char *name, const char *value, int overwrite);
