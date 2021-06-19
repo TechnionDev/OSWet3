@@ -91,7 +91,17 @@ void enqueue(Queue *q, Task *task) {
     int val_index = 0;
     int toRemove = 0;
 
-    while (q->capacity == q->used) {
+    if (q->capacity == getConnCounter()) {
+        if (q->used == 0) {
+            warning("All connections are being handled. Can't drop any. Dropping new connection with fd %d", task->connfd);
+            close(task->connfd);
+            free(task);
+            if (!queueUnlock(q)) {
+                return;
+            }
+            return; // Ignore the request
+        }
+
         // TODO: Handle different policies
         switch (q->policy) {
             case BLOCK:
@@ -101,13 +111,15 @@ void enqueue(Queue *q, Task *task) {
             case DT:
                 warning("Queue is full. Dropping request with fd %d", task->connfd);
                 close(task->connfd);
+                free(task);
                 if (!queueUnlock(q)) {
                     return;
                 }
                 return; // Ignore the request
             case DH:
                 warning("Queue is full. Dropping head with fd %d", q->values[q->startIndex]->connfd);
-                close(q->values[q->startIndex]->connfd);
+                decConnCounter();
+                Close(q->values[q->startIndex]->connfd);
                 taskDestroy(q->values[q->startIndex]);
                 q->values[q->startIndex] = NULL;
                 q->startIndex = (q->startIndex + 1) % q->capacity;
@@ -115,12 +127,12 @@ void enqueue(Queue *q, Task *task) {
                 break;
             case RANDOM:
                 // Remove 25% of the queue at random
-                toRemove = q->used * 0.25;
+                toRemove = ceil(q->used * 0.25);
                 warning("Queue is full. Removing 25%% (%d) at random", toRemove);
-                q->used -= toRemove; // Update the new used
-                for (int i = 0, r = rand() % (q->capacity - i); i < toRemove; i++, r = rand() % (q->capacity - i)) {
+                for (int i = 0, r = rand() % (q->used - i); i < toRemove; i++, r = rand() % (q->used - i)) {
                     r = (q->startIndex + r) % q->capacity;
-                    close(q->values[r]->connfd);
+                    decConnCounter();
+                    Close(q->values[r]->connfd);
                     taskDestroy(q->values[r]);
                     q->values[r] = NULL;
                     if (r == q->startIndex) {
@@ -137,6 +149,7 @@ void enqueue(Queue *q, Task *task) {
                         queuePrint(q);
                     }
                 }
+                q->used -= toRemove; // Update the new used
                 debug("Queue's new capacity: %zu", q->used);
 
                 break;
@@ -145,6 +158,7 @@ void enqueue(Queue *q, Task *task) {
 
     val_index = (q->startIndex + q->used) % q->capacity;
     q->used++;
+    incConnCounter();
     debug("Enqueuing fd: %d to queue of size: %zu to index: %d", task->connfd, q->used - 1, val_index);
 
     q->values[val_index] = task;

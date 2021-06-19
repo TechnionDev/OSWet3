@@ -1,4 +1,5 @@
 #include "Thread_pool.h"
+#include "globalConnectionsCounter.h"
 
 #define USAGE_TEXT "Usage: %s <port> <workers> <buffer_size> <policy>\n"
 
@@ -23,8 +24,8 @@ void getargs(int *port, Queue **queue, int *pool_size, int argc, char *argv[]) {
         exit(1);
     }
     debug("Policy is %d", p);
-    *queue = queueCreate(atoi(argv[3]), p);
     *pool_size = atoi(argv[2]);
+    *queue = queueCreate(atoi(argv[3]), p);
 }
 
 int main(int argc, char *argv[]) {
@@ -32,6 +33,7 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in clientaddr;
     Queue *request_queue;
     getargs(&port, &request_queue, &pool_size, argc, argv);
+    initConnCounter();
     threadPool_create(request_queue, pool_size);
 
     listenfd = Open_listenfd(port);

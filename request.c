@@ -7,15 +7,14 @@
 
 
 void addStatsHeaders(char *buf, Task *task) {
-    long long arrival, dispatch;
-    arrival = task->timeOfArrival.tv_sec * 1000 + task->timeOfArrival.tv_usec / 1000;
-    dispatch = (task->dispathTime.tv_sec * 1000 + task->dispathTime.tv_usec/ 1000) - arrival;
-    sprintf(buf, "%sStat-req-arrival: %lld\r\n", buf, arrival);
-    sprintf(buf, "%sStat-req-dispatch: %lld\r\n", buf, dispatch);
-    sprintf(buf, "%sStat-thread-id: %d\r\n", buf, task->threadId);
-    sprintf(buf, "%sStat-thread-count: %d\r\n", buf, task->threadReqHandledCount);
-    sprintf(buf, "%sStat-thread-static: %d\r\n", buf, task->threadReqHandledStaticCount);
-    sprintf(buf, "%sStat-thread-dynamic: %d\r\n", buf, task->threadReqHandledDynamicCount);
+    struct timeval dispatch;
+    timersub(&task->dispatchTime, &task->timeOfArrival, &dispatch);
+    sprintf(buf, "%sStat-Req-Arrival:: %ld.%06d\r\n", buf, task->timeOfArrival.tv_sec, task->timeOfArrival.tv_usec);
+    sprintf(buf, "%sStat-Req-Dispatch:: %ld.%06d\r\n", buf, dispatch.tv_sec, dispatch.tv_usec);
+    sprintf(buf, "%sStat-Thread-Id:: %d\r\n", buf, task->threadId);
+    sprintf(buf, "%sStat-Thread-Count:: %d\r\n", buf, task->threadReqHandledCount);
+    sprintf(buf, "%sStat-Thread-Static:: %d\r\n", buf, task->threadReqHandledStaticCount);
+    sprintf(buf, "%sStat-Thread-Dynamic:: %d\r\n\r\n", buf, task->threadReqHandledDynamicCount);
 }
 
 // requestError(      fd,    filename,        "404",    "Not found", "OS-HW3 Server could not find this file");
@@ -125,15 +124,16 @@ void requestServeDynamic(Task *task, char *filename, char *cgiargs) {
     addStatsHeaders(buf, task);
 
     Rio_writen(task->connfd, buf, strlen(buf));
+    pid_t pid;
 
-    if (Fork() == 0) {
+    if ((pid = Fork()) == 0) {
         /* Child process */
         Setenv("QUERY_STRING", cgiargs, 1);
         /* When the CGI process writes to stdout, it will instead go to the socket */
         Dup2(task->connfd, STDOUT_FILENO);
         Execve(filename, emptylist, environ);
     }
-    Wait(NULL);
+    WaitPid(pid, NULL, 0);
 }
 
 
@@ -194,18 +194,18 @@ void requestHandle(Task *task) {
     }
 
     if (is_static) {
-        task->threadReqHandledStaticCount++;
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
             requestError(task, filename, "403", "Forbidden", "OS-HW3 Server could not read this file");
             return;
         }
+        task->threadReqHandledStaticCount++;
         requestServeStatic(task, filename, sbuf.st_size);
     } else {
-        task->threadReqHandledDynamicCount++;
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
             requestError(task, filename, "403", "Forbidden", "OS-HW3 Server could not run this CGI program");
             return;
         }
+        task->threadReqHandledDynamicCount++;
         requestServeDynamic(task, filename, cgiargs);
     }
 }
